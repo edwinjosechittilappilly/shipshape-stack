@@ -32,7 +32,7 @@ format_frontend() {
 }
 
 while IFS= read -r file; do
-  [ -n "$file" ] && [ -f "$file" ] || continue
+  if [ -z "$file" ] || [ ! -f "$file" ]; then continue; fi
   case "$file" in
     "$root"/backend/*.py) format_python "$file" ;;
     "$root"/frontend/node_modules/*) ;;
