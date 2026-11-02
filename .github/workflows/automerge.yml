@@ -1,0 +1,53 @@
+# Auto-merge for PRs labelled `status: ready-to-merge` (set by a maintainer, or by an agent once its own checklist is done).
+#
+# This workflow does NOT merge anything itself: it asks GitHub to merge *when the branch protection rules are satisfied*
+# (`gh pr merge --auto`). GitHub then waits for every required check (`ci-success`) and required review before merging.
+# Removing the label, adding `status: needs-human`, or converting to draft cancels the request.
+#
+# One-time repository setup (Settings):
+#   1. General -> Pull Requests -> enable "Allow auto-merge" (and "Allow squash merging").
+#   2. Rules -> Rulesets -> protect `main`: require a pull request, require the `ci-success` status check, require
+#      branches to be up to date, block force pushes. Without required checks, auto-merge merges immediately.
+#
+# `pull_request_target` is used so the token can write on PRs from forks. Nothing from the PR is checked out or executed;
+# the job only runs `gh` against the PR number. Only people with triage access or above can apply labels, so the label
+# is the authorisation. See docs/security.md.
+name: Auto-merge
+
+on:
+  pull_request_target:
+    types: [labeled, unlabeled, ready_for_review, converted_to_draft, synchronize]
+
+concurrency:
+  group: automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  automerge:
+    name: auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # required by the enablePullRequestAutoMerge mutation
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      WANTED: >-
+        ${{ contains(github.event.pull_request.labels.*.name, 'status: ready-to-merge') &&
+        !contains(github.event.pull_request.labels.*.name, 'status: needs-human') &&
+        !github.event.pull_request.draft }}
+    steps:
+      - name: Enable auto-merge (squash)
+        if: env.WANTED == 'true'
+        run: |
+          gh pr merge "$PR_NUMBER" --auto --squash
+          echo "Auto-merge enabled for #$PR_NUMBER: GitHub merges it once required checks and reviews pass." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Disable auto-merge
+        if: env.WANTED != 'true' && github.event.pull_request.auto_merge != null
+        run: |
+          gh pr merge "$PR_NUMBER" --disable-auto
+          echo "Auto-merge disabled for #$PR_NUMBER (label removed, needs-human set, or draft)." | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,56 @@
+# Path filters for the `changes` job in .github/workflows/ci.yml (dorny/paths-filter).
+# A job whose filter is false is skipped, and `ci-success` treats skipped as fine, so a docs-only PR does not pay for
+# a Postgres container and a browser. Pushes to main, merge-queue runs and manual runs ignore this file and run everything.
+#
+# Rule of thumb: a filter lists every path whose change could plausibly change that job's result. When in doubt, add
+# the path: a wasted run is cheaper than a regression that skipped its own check.
+
+# Files that can affect every job. Anchored once and reused below.
+shared: &shared
+  - "Makefile"
+  - ".github/changes-filter.yml"
+  - ".github/workflows/ci.yml"
+
+backend:
+  - *shared
+  - "backend/**"
+
+frontend:
+  - *shared
+  - "frontend/**"
+
+# Playwright against the compose stack exercises both services and the images, so anything that builds them counts.
+fullstack:
+  - *shared
+  - "backend/**"
+  - "frontend/**"
+  - "docker-compose.yml"
+
+helm:
+  - *shared
+  - "deploy/**"
+
+iac:
+  - *shared
+  - "infra/terraform/**"
+
+# Repo scripts and the agent hook scripts they test (hook configuration calls these scripts). The repo-audit step of this
+# job scores the whole repository layout (docs, policies, workflows), so those paths trigger it too.
+scripts:
+  - *shared
+  - "scripts/**"
+  - ".agents/**"
+  - ".claude/**"
+  - ".codex/**"
+  - ".cursor/**"
+  - ".pre-commit-config.yaml"
+  - ".github/**"
+  - "docs/**"
+  - "*.md"
+
+kind:
+  - *shared
+  - "backend/**"
+  - "frontend/**"
+  - "deploy/**"
+  - "scripts/kind-e2e.sh"

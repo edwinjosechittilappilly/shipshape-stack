@@ -1,0 +1,20 @@
+# markdownlint rules (https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md), run via markdownlint-cli2.
+# Philosophy: enforce structure (headings, lists, fenced code languages), not prose layout.
+default: true
+
+# Prose is written one paragraph per line; wrapping is an editor concern.
+MD013: false
+# Templates (PR/issue templates, docs) use inline HTML comments and <details>.
+MD033: false
+# Plans and ADRs repeat headings like "Consequences" under different parents.
+MD024:
+  siblings_only: true
+# Allow a bare `1.` list style or incrementing numbers; we only require consistency.
+MD029:
+  style: one_or_ordered
+# Agent skill files start with YAML front matter carrying the title; templates start with a comment.
+MD041: false
+# Tables are written by hand and by agents; column alignment is not worth a failing build.
+MD060: false
+# Fenced code blocks must declare a language so syntax highlighting and tooling work.
+MD040: true

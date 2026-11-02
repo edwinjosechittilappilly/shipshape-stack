@@ -1,0 +1,78 @@
+name: Task (agent-ready)
+description: A well-specified unit of work that a person or a coding agent can pick up without further questions
+title: "chore: "
+labels: ["status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A good task is **small, specific and verifiable**: someone with no prior context can finish it from this
+        page alone. A maintainer adds the `agent: ready` label once the issue meets that bar, which signals that
+        a coding agent may start. Rule of thumb: if you cannot fill in "Verification" with commands, the task is
+        not ready yet. See `.agents/skills/writing-issues/SKILL.md`.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One or two sentences, outcome first ("Users can ...", "The API returns ...").
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this matters, links to related issues, PRs, docs or decisions. Anything a newcomer would otherwise have to ask.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist of observable, testable outcomes. Each item must be unambiguous.
+      placeholder: |
+        - [ ] `GET /api/v1/items?done=true` returns only completed items
+        - [ ] Unit and integration tests cover the filter, including an empty result
+        - [ ] OpenAPI docs describe the parameter
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What must NOT be changed in this task. Prevents scope creep and surprise diffs.
+      placeholder: |
+        - No UI changes
+        - No schema migration
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification commands
+      description: Commands that prove the task is done. They must pass locally and in CI.
+      render: shell
+      placeholder: |
+        make -C backend lint typecheck test
+        make test-integration
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files likely involved
+      description: Paths or modules to start from. A hint, not a restriction.
+      placeholder: |
+        backend/src/app/api/items.py
+        backend/tests/integration/test_items_api.py
+  - type: dropdown
+    id: size
+    attributes:
+      label: Expected size
+      description: Tasks above "M" should usually be split.
+      options:
+        - XS (under 10 lines)
+        - S (under 50 lines)
+        - M (under 200 lines)
+        - L or bigger (consider splitting)
+    validations:
+      required: true

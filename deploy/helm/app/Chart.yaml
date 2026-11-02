@@ -1,0 +1,9 @@
+apiVersion: v2
+name: app
+description: Backend (FastAPI) + frontend (nginx) for the starter template, with a pre-install/upgrade migration Job.
+type: application
+# Chart version: bump on any chart change. appVersion: default image tag when `image.tag` is empty.
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+keywords: [starter, fastapi, react]

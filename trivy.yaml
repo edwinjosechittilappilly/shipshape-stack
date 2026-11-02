@@ -1,0 +1,47 @@
+# Trivy policy shared by `make security` (scripts/security/trivy-scan.sh) and CI, so a
+# local run and the pipeline fail on exactly the same findings. Trivy reads this file
+# automatically from the working directory (override with --config).
+#
+# Docs: https://trivy.dev/latest/docs/references/configuration/config-file/
+
+# Only fail on what matters; MEDIUM/LOW is noise for a gate. Tighten here, not in scripts.
+severity:
+  - HIGH
+  - CRITICAL
+
+# Findings in the source tree: dependency vulnerabilities (uv.lock, package-lock.json),
+# committed secrets, and IaC misconfiguration (Dockerfiles, Kubernetes/Helm, Terraform).
+scan:
+  scanners:
+    - vuln
+    - secret
+    - misconfig
+  skip-dirs:
+    # Installed packages and build output: lockfiles describe what is installed, and
+    # scanning the installs again only adds duplicates and false positives.
+    - "**/node_modules"
+    - "**/.venv"
+    - "**/dist"
+    - "**/build"
+    - "**/coverage"
+    - "**/playwright-report"
+    - "**/test-results"
+    - "**/__pycache__"
+    - "**/.mypy_cache"
+    - "**/.pytest_cache"
+    - "**/.ruff_cache"
+    # Provider caches are downloaded third-party code, not ours.
+    - "**/.terraform"
+    # Our own generated reports.
+    - reports
+
+vulnerability:
+  # A vulnerability with no released fix cannot be acted on; do not block merges on it.
+  # (Still visible with `trivy fs --ignore-unfixed=false .`.)
+  ignore-unfixed: true
+
+# Suppressions live in .trivyignore, each with a justification and an expiry.
+ignorefile: .trivyignore
+
+# Never prompt or print update banners in CI logs.
+skip-version-check: true

@@ -1,0 +1,30 @@
+# Helm overrides for the local kind cluster: small, single replica, images loaded with
+# `kind load` (so never pulled), database provided by deploy/kind/postgres.yaml.
+backend:
+  replicaCount: 1
+  image:
+    repository: app-backend
+    tag: local
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: "1", memory: 384Mi}
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: app-frontend
+    tag: local
+    pullPolicy: IfNotPresent
+
+config:
+  appEnv: ci
+  logLevel: DEBUG
+
+database:
+  existingSecret: app-database
+  existingSecretKey: database-url
+
+# kind's default CNI (kindnet) does not enforce NetworkPolicy, so leave it off here.
+networkPolicy:
+  enabled: false

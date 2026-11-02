@@ -1,0 +1,11 @@
+# Keep the build context small and the cache stable: only sources reach the image.
+node_modules
+dist
+coverage
+playwright-report
+test-results
+e2e
+.git
+*.md
+Dockerfile
+.dockerignore

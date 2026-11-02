@@ -1,0 +1,112 @@
+# Full local stack: Postgres -> one-shot migration -> backend -> frontend (nginx proxy).
+#
+#   make up      # docker compose up -d --build --wait   -> http://localhost:8080
+#   make down    # tears everything down, including the database volume
+#
+# Design notes (the "why"):
+# - Migrations are a separate one-shot service, never run at app start, so scaling the
+#   backend never races on schema changes. The Kubernetes chart mirrors this with a hook Job.
+# - Every long-running service has a healthcheck so `up --wait` only returns when the stack
+#   is genuinely usable, and so `depends_on: condition: service_healthy` gates start order.
+# - Credentials below are throwaway local defaults, overridable via the environment/.env.
+#   Never reuse them outside local development.
+
+name: app
+
+x-db-env: &db-env
+  # Hostname `postgres` resolves on the compose network; the host port mapping is separate.
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-app}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      # Host port is configurable so a local Postgres on 5432 does not block the stack.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    image: app-backend:local
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      <<: *db-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # One-shot: exits 0 when the schema is current. `up --wait` treats a clean exit as success.
+    restart: "no"
+
+  backend:
+    image: app-backend:local
+    build:
+      context: ./backend
+    environment:
+      <<: *db-env
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # The runtime image has no curl; the stdlib is always there. /readyz also proves DB access.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  frontend:
+    image: app-frontend:local
+    build:
+      context: ./frontend
+    environment:
+      # nginx envsubst template target for the /api/ proxy.
+      API_UPSTREAM: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

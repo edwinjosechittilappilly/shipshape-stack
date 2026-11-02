@@ -1,0 +1,16 @@
+# Keep the build context to what the Dockerfile COPYs: pyproject.toml, uv.lock, src/, alembic.ini, migrations/.
+.venv
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+tests
+Makefile
+README.md
+Dockerfile
+.dockerignore
+.env
+.env.*

@@ -1,0 +1,115 @@
+# DEV / TEST ONLY - NOT FOR PRODUCTION.
+# A throwaway single-pod Postgres with an emptyDir volume (data is lost when the pod restarts)
+# and hard-coded credentials, so the kind e2e run has a database without any cloud account.
+# In real environments use a managed Postgres and create the DATABASE_URL Secret out-of-band.
+#
+# Applied into the release namespace: kubectl -n <ns> apply -f deploy/kind/postgres.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: dev-only
+type: Opaque
+stringData:
+  POSTGRES_USER: app
+  POSTGRES_PASSWORD: app-dev-only
+  POSTGRES_DB: app
+---
+# The Secret the chart reads (database.existingSecret / existingSecretKey in values-kind.yaml).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-database
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: dev-only
+type: Opaque
+stringData:
+  database-url: postgresql+psycopg://app:app-dev-only@postgres:5432/app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: dev-only
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: dev-only
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # emptyDir + one writer: never run two pods against the same data dir
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/part-of: dev-only
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70 # the `postgres` user in the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            exec:
+              command: [sh, -c, "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            exec:
+              command: [sh, -c, "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

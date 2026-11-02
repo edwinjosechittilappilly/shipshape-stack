@@ -1,0 +1,19 @@
+{{ include "app.fullname" . }} {{ .Chart.Version }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Reach the app:
+{{- if .Values.ingress.enabled }}
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ default "<ingress-address>" .Values.ingress.host }}/
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }}-frontend 8080:{{ .Values.frontend.service.port }}
+  then open http://localhost:8080
+{{- end }}
+
+Verify:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }} --logs
+
+Database: DATABASE_URL is read from Secret "{{ include "app.databaseSecretName" . }}" key "{{ include "app.databaseSecretKey" . }}".
+{{- if not .Values.database.existingSecret }}
+WARNING: the chart created that Secret from database.url. That is for development only.
+{{- end }}
+Migrations run as a pre-install/pre-upgrade hook Job; roll back with: helm rollback {{ .Release.Name }} <revision>
+(rollback does not undo schema changes - see docs/deployment.md).

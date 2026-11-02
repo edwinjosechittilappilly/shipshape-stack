@@ -1,0 +1,446 @@
+# Continuous integration. Every job calls `make` targets (or one documented command), so a green local `make check`
+# means the same thing as a green job here. See docs/ci.md for the job graph, local equivalents and how to add a job.
+#
+# Required status check for branch protection: `ci-success` (the aggregate job at the bottom). Individual jobs may be
+# skipped by path filters, so requiring them one by one would block unrelated PRs.
+name: CI
+
+on:
+  pull_request:
+    # `labeled` is deliberately absent: the labeler bot adds labels right after a PR opens and each event would cancel
+    # and restart this whole workflow. The kind-e2e opt-in label is read when the run starts (see docs/ci.md).
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  merge_group:
+  schedule:
+    # Weekly full run (including kind-e2e) catches drift: new base-image CVEs, deleted upstream tags, tool breakage.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      kind_e2e:
+        description: Also run the heavy kind cluster end-to-end job
+        type: boolean
+        default: false
+
+# One run per PR (a new push cancels the stale run). Runs on main, merge queue and schedule are never cancelled so
+# every merged commit gets a complete result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Deny by default. Each job below grants only what it needs.
+permissions: {}
+
+env:
+  # Tool versions that are not covered by Dependabot. Bump deliberately, in one PR, and list the change in the PR body.
+  # Binary tools (trivy, gitleaks, actionlint, kubeconform) are pinned with checksums in scripts/ci/install-tool.sh.
+  UV_VERSION: "0.13.6"
+  PRE_COMMIT_VERSION: "4.7.0"
+  TOFU_VERSION: "1.13.2"
+  HELM_VERSION: "v4.3.1"
+  KIND_VERSION: "v0.33.0"
+
+jobs:
+  # ------------------------------------------------------------------------------------------------------------------
+  # Decide which jobs matter for this change. On pull_request the filter is evaluated against the PR diff; on every other
+  # event (push to main, merge queue, schedule, manual) everything runs.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ github.event_name != 'pull_request' || steps.filter.outputs.backend == 'true' }}
+      frontend: ${{ github.event_name != 'pull_request' || steps.filter.outputs.frontend == 'true' }}
+      fullstack: ${{ github.event_name != 'pull_request' || steps.filter.outputs.fullstack == 'true' }}
+      helm: ${{ github.event_name != 'pull_request' || steps.filter.outputs.helm == 'true' }}
+      iac: ${{ github.event_name != 'pull_request' || steps.filter.outputs.iac == 'true' }}
+      scripts: ${{ github.event_name != 'pull_request' || steps.filter.outputs.scripts == 'true' }}
+      kind: ${{ github.event_name != 'pull_request' || steps.filter.outputs.kind == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/changes-filter.yml
+
+  # ------------------------------------------------------------------------------------------------------------------
+  # Always runs: it is cheap and guards the files every change touches (formatting, YAML, Markdown, secrets, workflows).
+  hygiene:
+    name: Hygiene (pre-commit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      # Hook environments (Go builds, node_modules, venvs) are the slow part; cache them keyed on the hook config.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ env.PRE_COMMIT_VERSION }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run all hooks
+        run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run --all-files --show-diff-on-failure --color always
+
+  workflow-lint:
+    name: Workflow lint (actionlint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install actionlint (pinned, checksum-verified)
+        run: scripts/ci/install-tool.sh actionlint
+      # actionlint runs shellcheck over every `run:` block when it is on PATH (preinstalled on ubuntu runners).
+      - name: Lint workflows
+        run: actionlint -color
+
+  # ------------------------------------------------------------------------------------------------------------------
+  backend:
+    name: Backend (lint, types, unit)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install dependencies (fails if uv.lock is stale)
+        run: make -C backend setup
+      - name: Lint, type-check, unit tests
+        run: make -C backend lint typecheck test
+
+  backend-integration:
+    name: Backend (integration, Postgres)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        # Job steps start only once the database accepts connections.
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://app:app@localhost:5432/app
+      APP_ENV: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: make -C backend setup
+      - name: Integration tests
+        run: make -C backend test-integration
+
+  # ------------------------------------------------------------------------------------------------------------------
+  frontend:
+    name: Frontend (lint, types, unit, build)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies (npm ci)
+        run: make -C frontend setup
+      - name: Lint, type-check, unit tests, build
+        run: make -C frontend lint typecheck test build
+      # Same React Doctor ruleset as the advisory PR-comment workflow (.github/workflows/react-doctor.yml).
+      - name: React Doctor
+        run: make -C frontend doctor
+
+  e2e-mocked:
+    name: E2E (Playwright, mocked API)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: make -C frontend setup
+      # Browser downloads are ~150 MB; key the cache on the lockfile because it pins the Playwright version.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - run: make -C frontend playwright-install
+      - name: Playwright (mocked project)
+        run: make -C frontend test-e2e
+      # Reports and traces are the only way to debug a CI-only failure; keep them when anything goes wrong.
+      - name: Upload Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-mocked
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  e2e-fullstack:
+    name: E2E (Playwright, full stack)
+    needs: changes
+    if: needs.changes.outputs.fullstack == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: make -C frontend setup
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - run: make -C frontend playwright-install
+      - name: Build and start the stack (postgres, migrate, backend, frontend)
+        run: make up
+      - name: Playwright (fullstack project against http://localhost:8080)
+        run: make -C frontend test-e2e-fullstack
+      - name: Dump compose logs
+        if: failure()
+        run: docker compose logs --no-color --timestamps > compose.log 2>&1 || true
+      - name: Upload logs, report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-fullstack
+          path: |
+            compose.log
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Tear down
+        if: always()
+        run: make down
+
+  # ------------------------------------------------------------------------------------------------------------------
+  helm:
+    name: Helm (lint, render, kubeconform)
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Install kubeconform (pinned, checksum-verified)
+        run: scripts/ci/install-tool.sh kubeconform
+      - name: helm lint --strict and helm template
+        run: make helm-lint
+      # Schema-validate the rendered manifests with default values and with every values file shipped for local use.
+      - name: Validate rendered manifests against Kubernetes schemas
+        run: |
+          set -euo pipefail
+          validate() {
+            echo "::group::kubeconform ($*)"
+            helm template app deploy/helm/app "$@" \
+              | kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.34.0
+            echo "::endgroup::"
+          }
+          validate
+          for values in deploy/kind/values*.yaml; do
+            if [ -e "$values" ]; then
+              validate --values "$values"
+            fi
+          done
+
+  iac:
+    name: IaC (OpenTofu fmt, validate)
+    needs: changes
+    if: needs.changes.outputs.iac == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+          tofu_wrapper: false
+      - name: Format check
+        run: tofu fmt -check -recursive -diff infra/terraform
+      # `-backend=false` validates syntax, types and references without credentials or remote state.
+      - name: Validate every root module and module
+        run: |
+          set -euo pipefail
+          while IFS= read -r dir; do
+            echo "::group::tofu validate $dir"
+            tofu -chdir="$dir" init -backend=false -input=false -no-color
+            tofu -chdir="$dir" validate -no-color
+            echo "::endgroup::"
+          done < <(find infra/terraform -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
+
+  scripts:
+    name: Scripts (CI unit tests, hook tests, shellcheck)
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Unit tests for scripts/ci
+        run: python3 -m unittest discover -s scripts/ci/tests -t . -v
+      - name: Agent hook self-tests
+        run: make hooks-test
+      # shellcheck is preinstalled on GitHub-hosted ubuntu runners.
+      - name: shellcheck
+        run: find scripts .agents -name '*.sh' -print0 | xargs -0 --no-run-if-empty shellcheck
+      - name: Unit tests for the repo-audit skill
+        run: python3 -m unittest discover -s .agents/skills/repo-audit/tests -t .agents/skills/repo-audit -v
+      # Dogfooding: the template must keep a high score under its own audit. A drop below 90 fails the job; the
+      # Markdown report lands in the job summary either way.
+      - name: Repo audit (score must stay >= 90)
+        run: python3 .agents/skills/repo-audit/scripts/audit.py . --format markdown --min-score 90 | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------------------------------------------------------------------------------------------
+  # Heavy (builds both images, creates a cluster, installs the chart). Runs on main, weekly, on manual request, and on PRs
+  # that carry the `run: kind-e2e` label when the run starts.
+  kind-e2e:
+    name: Kubernetes (kind end-to-end)
+    needs: changes
+    if: >-
+      needs.changes.outputs.kind == 'true' && (
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.kind_e2e) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run: kind-e2e')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+      # install_only: put the kind binary on PATH; scripts/kind-e2e.sh creates and deletes its own cluster.
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          install_only: true
+          version: ${{ env.KIND_VERSION }}
+      - name: kind end-to-end
+        run: make kind-e2e
+
+  # ------------------------------------------------------------------------------------------------------------------
+  # The single required status check. `if: always()` makes it run (and fail) even when a needed job failed or was
+  # cancelled; skipped jobs (path filters, opt-in jobs) are fine. Add every new job to `needs`.
+  ci-success:
+    name: ci-success
+    needs:
+      - changes
+      - hygiene
+      - workflow-lint
+      - backend
+      - backend-integration
+      - frontend
+      - e2e-mocked
+      - e2e-fullstack
+      - helm
+      - iac
+      - scripts
+      - kind-e2e
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Evaluate needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "| \(.key) | \(.value.result) |"' | {
+            echo "### CI results"
+            echo
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            cat
+          } >>"$GITHUB_STEP_SUMMARY"
+          bad="$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "\(.key)=\(.value.result)"')"
+          if [ -n "$bad" ]; then
+            echo "::error title=CI failed::Not green: ${bad//$'\n'/, }"
+            exit 1
+          fi
+          echo "All required jobs succeeded or were skipped by path filters."

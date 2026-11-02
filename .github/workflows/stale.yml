@@ -1,0 +1,38 @@
+# Gentle housekeeping: nudge inactive issues and PRs, close them only after a long, announced grace period.
+# Anything a person or an agent is actively relying on is exempt via labels.
+name: Stale
+
+on:
+  schedule:
+    - cron: "43 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          days-before-stale: 60
+          days-before-close: 21
+          stale-issue-label: stale
+          stale-pr-label: stale
+          stale-issue-message: >-
+            This issue has had no activity for 60 days, so it is marked stale. Comment or remove the label to keep it
+            open; otherwise it will be closed in 21 days. Closed issues can always be reopened.
+          stale-pr-message: >-
+            This pull request has had no activity for 60 days, so it is marked stale. Push a commit, comment or remove
+            the label to keep it open; otherwise it will be closed in 21 days.
+          close-issue-message: Closing after 21 more days without activity. Reopen if this is still relevant.
+          close-pr-message: Closing after 21 more days without activity. Reopen when you are ready to continue.
+          exempt-issue-labels: "status: blocked,agent: in-progress,agent: ready,good first issue,help wanted,type: security"
+          exempt-pr-labels: "status: blocked,agent: in-progress,status: ready-to-merge,type: security"
+          exempt-all-milestones: true
+          exempt-draft-pr: true
+          operations-per-run: 100

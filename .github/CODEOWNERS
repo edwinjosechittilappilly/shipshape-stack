@@ -1,0 +1,21 @@
+# Code owners are requested for review automatically, and "Require review from Code Owners" in the branch ruleset
+# makes their approval mandatory. Later lines override earlier ones: the LAST matching pattern wins.
+#
+# TEMPLATE NOTE: replace `@edwinjosechittilappilly` below with your own user or `@org/team` handles. With a
+# single maintainer every line can stay identical; add teams as the project grows (e.g. a platform team for
+# .github/ and infra/, whose changes can run code with repository credentials).
+* @edwinjosechittilappilly
+
+/backend/ @edwinjosechittilappilly
+/frontend/ @edwinjosechittilappilly
+/deploy/ @edwinjosechittilappilly
+/infra/ @edwinjosechittilappilly
+/docs/ @edwinjosechittilappilly
+
+# Workflows, CI scripts and agent hooks execute with elevated privileges: keep these owned by a small group.
+/.github/ @edwinjosechittilappilly
+/scripts/ @edwinjosechittilappilly
+/.agents/ @edwinjosechittilappilly
+/.claude/ @edwinjosechittilappilly
+/AGENTS.md @edwinjosechittilappilly
+/SECURITY.md @edwinjosechittilappilly

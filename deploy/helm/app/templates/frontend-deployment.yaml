@@ -1,0 +1,100 @@
+{{- $f := .Values.frontend }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}-frontend
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+spec:
+  {{- if not $f.autoscaling.enabled }}
+  replicas: {{ $f.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 6 }}
+  template:
+    metadata:
+      {{- with $f.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "app.componentLabels" (dict "ctx" . "component" "frontend") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $f.podSecurityContext | nindent 8 }}
+      containers:
+        - name: frontend
+          image: {{ include "app.image" (dict "image" $f.image "ctx" .) | quote }}
+          imagePullPolicy: {{ $f.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $f.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $f.port }}
+              protocol: TCP
+          env:
+            - name: API_UPSTREAM
+              value: {{ include "app.frontendApiUpstream" . | quote }}
+            {{- with $f.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            {{- toYaml $f.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml $f.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $f.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $f.resources | nindent 12 }}
+          volumeMounts:
+            {{- range $i, $path := $f.writablePaths }}
+            - name: writable-{{ $i }}
+              mountPath: {{ $path }}
+            {{- end }}
+      volumes:
+        {{- range $i, $path := $f.writablePaths }}
+        - name: writable-{{ $i }}
+          emptyDir: {sizeLimit: 16Mi}
+        {{- end }}
+      {{- with $f.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $f.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $f.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "app.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 14 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.fullname" . }}-frontend
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ $f.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "app.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}

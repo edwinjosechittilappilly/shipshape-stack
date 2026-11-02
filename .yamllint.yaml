@@ -1,0 +1,33 @@
+# yamllint (https://yamllint.readthedocs.io). Catches what a YAML parser accepts but humans misread:
+# duplicate keys, odd indentation, truthy surprises. Style rules that fight formatters or GitHub conventions are relaxed.
+extends: default
+
+ignore: |
+  # Helm templates are Go templates, not YAML, until rendered. `make helm-lint` covers them.
+  deploy/helm/*/templates/
+  # Lockfiles and dependencies are machine-written.
+  **/node_modules/
+  **/.venv/
+  **/*.lock
+  pnpm-lock.yaml
+
+rules:
+  # Workflows and compose files use long `run:` lines and URLs.
+  line-length: disable
+  # Most YAML in the wild (and GitHub Actions) omits the `---` document marker.
+  document-start: disable
+  # GitHub Actions uses the bare key `on:`; only flag truthy *values*.
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+  # Both `- item` flush with the parent key and indented are common; pick neither.
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  braces:
+    max-spaces-inside: 1
+  empty-values:
+    forbid-in-block-mappings: false

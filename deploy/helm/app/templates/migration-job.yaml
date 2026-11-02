@@ -1,0 +1,51 @@
+{{- if .Values.migration.enabled }}
+{{- $b := .Values.backend }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Revision in the name so a retried upgrade never collides with a previous Job.
+  name: {{ include "app.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" . "component" "migrate") | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    # Keep failed Jobs (and their logs) for debugging; clean up successful ones.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.componentLabels" (dict "ctx" . "component" "migrate") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # No serviceAccountName: hooks run before the chart's ServiceAccount exists on first install,
+      # and the Job needs no API access, so it uses the namespace default with no token mounted.
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $b.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "app.image" (dict "image" $b.image "ctx" .) | quote }}
+          imagePullPolicy: {{ $b.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.migration.command | nindent 12 }}
+          securityContext:
+            {{- toYaml $b.securityContext | nindent 12 }}
+          env:
+            {{- include "app.databaseEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 16Mi}
+{{- end }}

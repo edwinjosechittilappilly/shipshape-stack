@@ -1,0 +1,89 @@
+# Dependabot version updates (https://docs.github.com/code-security/dependabot). Weekly, grouped so a week of minor and
+# patch bumps arrives as one reviewable PR per ecosystem instead of a dozen. Major versions stay separate PRs because
+# they are the ones that break things. Titles follow Conventional Commits so pr-checks and pr-labeler accept them.
+#
+# Every `uses:` in .github/workflows is pinned by commit SHA with a `# vX.Y.Z` comment; Dependabot understands that
+# format and bumps both. Tool binaries pinned in scripts/ci/install-tool.sh are NOT covered: bump them by hand.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"
+    labels: ["dependencies", "area: ci"]
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # uv: reads backend/pyproject.toml and backend/uv.lock
+  - package-ecosystem: uv
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+    labels: ["dependencies", "area: backend"]
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+    labels: ["dependencies", "area: frontend"]
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Base images in the Dockerfiles (python, node, nginx-unprivileged). Pinned as `tag@sha256:digest`; Dependabot bumps both.
+  - package-ecosystem: docker
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+    labels: ["dependencies", "area: infra"]
+    groups:
+      docker-backend:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: docker
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+    labels: ["dependencies", "area: infra"]
+    groups:
+      docker-frontend:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # OpenTofu/Terraform providers: bumps version constraints and the committed .terraform.lock.hcl.
+  - package-ecosystem: terraform
+    directories: ["/infra/terraform/envs/dev", "/infra/terraform/modules/namespace"]
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+    labels: ["dependencies", "area: infra"]
+    groups:
+      terraform-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

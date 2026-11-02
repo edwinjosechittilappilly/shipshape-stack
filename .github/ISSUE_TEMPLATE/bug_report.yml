@@ -1,0 +1,70 @@
+name: Bug report
+description: Something behaves incorrectly or crashes
+title: "fix: "
+labels: ["type: bug", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more precisely you can reproduce the problem, the faster it can be fixed
+        (by a person or by a coding agent). Please do not paste secrets or personal data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: One or two sentences. What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or clicks, starting from a clean checkout if possible.
+      placeholder: |
+        1. make up
+        2. Open http://localhost:8080 and add an item with an empty title
+        3. See the error
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, output or screenshots
+      description: Relevant output from `make logs`, the browser console, or CI. Redact anything sensitive.
+      render: shell
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Backend (API)
+        - Frontend (UI)
+        - Database / migrations
+        - Docker / Compose
+        - Kubernetes / Helm
+        - CI / workflows
+        - Docs
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag or `git rev-parse --short HEAD`.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser, Docker and Node/Python versions, deployment target.
+      placeholder: "macOS 15, Chrome 140, Docker 29.1, local compose stack"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through a private advisory, see SECURITY.md).
+          required: true

@@ -1,0 +1,14 @@
+# Trivy suppressions. One ID per line; Trivy applies them to every scanner
+# (vulnerabilities, secrets, misconfigurations).
+#
+# Policy: a suppression is a temporary, reviewed risk acceptance, not a fix.
+#   1. Put a comment directly above the entry: WHY it is safe/unfixable and a tracking issue.
+#   2. Give it an expiry date with `exp:` so it resurfaces automatically.
+#   3. Prefer fixing (upgrade the dependency, harden the manifest) over ignoring.
+#
+# Formats (https://trivy.dev/latest/docs/configuration/filtering/#by-finding-ids):
+#   CVE-2099-0001 exp:2099-01-31     # vulnerability, ignored until the date
+#   AVD-KSV-0001  exp:2099-01-31     # misconfiguration check ID
+#   generic-api-key                  # secret rule ID
+#
+# There are intentionally no active entries: the repository currently passes the gate cleanly.

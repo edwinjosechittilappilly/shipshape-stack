@@ -1,0 +1,50 @@
+# Secrets — only the documented .env.example is tracked.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+*.tsbuildinfo
+
+# IaC
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+
+# Reports and local tooling output
+reports/
+.kind/
+*.log
+
+# Agent-local state (shared agent config IS tracked)
+.claude/settings.local.json
+.claude/worktrees/
+.worktrees/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

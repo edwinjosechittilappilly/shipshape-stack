@@ -1,0 +1,18 @@
+{{- range $component := list "backend" "frontend" }}
+{{- $c := index $.Values $component }}
+{{- if $c.podDisruptionBudget.enabled }}
+---
+# maxUnavailable (not minAvailable) so a single-replica install can still be drained.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "app.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" $ "component" $component) | nindent 4 }}
+spec:
+  maxUnavailable: {{ $c.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" (dict "ctx" $ "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}

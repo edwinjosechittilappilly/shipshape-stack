@@ -1,0 +1,190 @@
+# Security scanning: Trivy (dependencies, secrets, IaC misconfiguration, both container images), gitleaks (secrets in
+# history) and dependency review (new vulnerable dependencies in a PR). Policy lives in trivy.yaml, .trivyignore and
+# .gitleaks.toml; `make security` runs the same Trivy script locally. Explanation and rules: docs/security.md.
+#
+# Supply chain: Trivy and gitleaks are installed from pinned, checksum-verified release binaries
+# (scripts/ci/install-tool.sh), NOT through a third-party action. In 2026 the tags of the official Trivy GitHub Action were
+# re-pointed at malicious code; anything referencing a tag silently ran it. A checksum committed to this repo cannot move.
+#
+# Private repositories: code scanning (SARIF upload) and dependency review need GitHub Advanced Security, which private
+# repos on personal accounts do not have. Those steps are gated on `repository.visibility == 'public'`. Results are always
+# published as workflow artifacts and as a job summary, so nothing is lost on a private repo.
+name: Security
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  schedule:
+    # New CVEs appear without any code change: rescan weekly so main does not rot silently.
+    - cron: "37 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+env:
+  # Mirror fallback: the default registry rate-limits shared CI IPs.
+  TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+  TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1,ghcr.io/aquasecurity/trivy-java-db:1
+
+jobs:
+  trivy:
+    name: Trivy (tree, IaC, images)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # SARIF upload; only used when the repository is public (see gates below)
+    env:
+      # Same-repo PRs, pushes and schedules can upload code-scanning results; fork PRs have a read-only token.
+      UPLOAD_SARIF: >-
+        ${{ github.event.repository.visibility == 'public' &&
+        (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install trivy (pinned, checksum-verified)
+        run: scripts/ci/install-tool.sh trivy
+      # The vulnerability DB is ~100 MB; a fresh key per run with prefix restore keeps it warm without going stale.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: trivy-db-${{ runner.os }}-
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # Image names match docker-compose.yml, so scripts/security/trivy-scan.sh finds them (BACKEND_IMAGE/FRONTEND_IMAGE defaults).
+      - name: Build backend image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./backend
+          load: true
+          push: false
+          tags: app-backend:local
+          cache-from: type=gha,scope=security-backend
+          cache-to: type=gha,mode=max,scope=security-backend
+      - name: Build frontend image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./frontend
+          load: true
+          push: false
+          tags: app-frontend:local
+          cache-from: type=gha,scope=security-frontend
+          cache-to: type=gha,mode=max,scope=security-frontend
+      # Fails the job on HIGH/CRITICAL findings (fixable ones: see trivy.yaml). Also writes JSON, SARIF and summary.md,
+      # and appends the summary to the job summary.
+      - name: Scan
+        run: scripts/security/trivy-scan.sh --out reports/security
+      - name: Upload reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-reports
+          path: reports/security/
+          retention-days: 30
+          if-no-files-found: warn
+      # One upload per report: GitHub accepts a single run per SARIF category.
+      - name: Code scanning (tree)
+        if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-fs.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/security/trivy-fs.sarif
+          category: trivy-fs
+      - name: Code scanning (IaC)
+        if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-config.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/security/trivy-config.sarif
+          category: trivy-config
+      - name: Code scanning (Helm chart)
+        if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-helm.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/security/trivy-helm.sarif
+          category: trivy-helm
+      - name: Code scanning (backend image)
+        if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-image-app-backend.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/security/trivy-image-app-backend.sarif
+          category: trivy-image-backend
+      - name: Code scanning (frontend image)
+        if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-image-app-frontend.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/security/trivy-image-app-frontend.sarif
+          category: trivy-image-frontend
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # history is the point: a secret removed in a later commit is still leaked
+          persist-credentials: false
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: scripts/ci/install-tool.sh gitleaks
+      # Rules and the tiny fixture allowlist are in .gitleaks.toml. Matches are redacted in logs and reports.
+      # PRs scan only their own commits; main, schedule and manual runs scan the whole history.
+      - name: Scan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          args=(git --config .gitleaks.toml --redact --no-banner --report-format sarif --report-path gitleaks.sarif --exit-code 1)
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            args+=(--log-opts "${BASE_SHA}..${HEAD_SHA}")
+          fi
+          status=0
+          gitleaks "${args[@]}" . || status=$?
+          {
+            echo "### Gitleaks"
+            echo
+            if [ "$status" -eq 0 ]; then echo "No secrets found."; else echo "Secrets detected (values redacted). Download the \`gitleaks-report\` artifact, rotate the credential first, then remove it."; fi
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitleaks-report
+          path: gitleaks.sarif
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Code scanning
+        if: ${{ !cancelled() && github.event.repository.visibility == 'public' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && hashFiles('gitleaks.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+  # Blocks PRs that introduce a known-vulnerable dependency or a disallowed license. Needs the dependency graph and
+  # Advanced Security on private repos, so it only runs on public ones.
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # PR comment with the findings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

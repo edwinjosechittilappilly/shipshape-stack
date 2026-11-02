@@ -1,0 +1,80 @@
+# pre-commit (https://pre-commit.com). Fast, deterministic hygiene checks that run on `git commit` locally and,
+# via `pre-commit run --all-files`, in the `hygiene` CI job. Install once with `uvx pre-commit install`.
+#
+# Scope rules:
+#   * Language-specific lint/type/test (ruff config, mypy, eslint, prettier, vitest...) lives in each package's
+#     Makefile and runs through `make lint` / `make check`. Only ruff is mirrored here so Python is formatted at commit time.
+#   * Every hook must be installable by pre-commit itself (python/node/golang environments) so CI needs no extra tools.
+#   * Every `rev` is a released tag. Bump with `uvx pre-commit autoupdate --freeze` reviewed in a normal PR.
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+        # Lockfiles are large by nature.
+        exclude: (^|/)(package-lock\.json|uv\.lock)$
+      - id: detect-private-key
+      - id: check-yaml
+        # Multiple documents are legal in Kubernetes manifests. Helm templates are Go templates, not YAML.
+        args: [--allow-multiple-documents]
+        exclude: ^deploy/helm/[^/]+/templates/
+      - id: check-json
+        # tsconfig files are JSONC (comments allowed), which strict JSON parsing rejects.
+        exclude: (^|/)tsconfig[^/]*\.json$
+      - id: check-toml
+
+  # Secrets: scans staged changes at commit time. Allowlist for fake fixture credentials is in .gitleaks.toml.
+  # CI additionally scans the full tree and history (see docs/security.md).
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # Python: same ruff version/config as `make -C backend lint`, scoped to backend/ so its pyproject.toml applies.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # Shell scripts (scripts/, .agents/, hooks). Bundles a shellcheck binary as a Python wheel: no system install.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # GitHub Actions workflows: syntax, expression types, and (when shellcheck is present) `run:` scripts.
+  # The golang hook builds actionlint from source with a pre-commit-managed Go toolchain.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  # Declared as a local node hook so pre-commit installs the pinned package from the npm registry. The upstream
+  # hook repo is installed via `npm install git+file://...`, which recent npm versions refuse (EALLOWGIT).
+  - repo: local
+    hooks:
+      - id: markdownlint-cli2
+        name: markdownlint-cli2
+        language: node
+        additional_dependencies: ["markdownlint-cli2@0.24.0"]
+        entry: markdownlint-cli2
+        types: [markdown]
+        # CHANGELOG.md is generated/maintained by release tooling in its own format.
+        exclude: ^CHANGELOG\.md$
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [--strict, --config-file, .yamllint.yaml]

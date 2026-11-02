@@ -1,0 +1,10 @@
+# Normalise line endings; shell scripts must stay LF even on Windows checkouts.
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+
+# Generated / lock files: collapse in PR diffs and exclude from language stats.
+backend/uv.lock linguist-generated=true -diff
+frontend/package-lock.json linguist-generated=true -diff

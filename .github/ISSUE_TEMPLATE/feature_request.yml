@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose a new capability or an improvement
+title: "feat: "
+labels: ["type: feature", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before the solution. Small, concrete requests get built; vague ones get discussed.
+        If you already know exactly what should change and how to verify it, use the **Task** form instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who is affected and what are they unable to do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen instead? Include API shapes or UI behaviour if you have a view.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, and why you prefer the proposal.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: How will we know it works?
+      description: Observable outcomes, ideally one per line.
+      placeholder: |
+        - [ ] POST /api/v1/items rejects duplicate titles with 409
+        - [ ] The UI shows the error in an alert
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Breaking change?
+      options:
+        - No, additive
+        - Yes, changes existing behaviour or an API
+        - Not sure
+    validations:
+      required: true

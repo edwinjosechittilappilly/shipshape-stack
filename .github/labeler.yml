@@ -1,0 +1,58 @@
+# Area labels, applied by actions/labeler (v5+ syntax) from .github/workflows/pr-labeler.yml with `sync-labels: true`:
+# a label is added when any changed file matches and removed again when no changed file matches.
+# A PR can carry several area labels. Type and size labels are computed elsewhere (scripts/ci/pr_labels.py).
+"area: backend":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "backend/**"
+
+"area: frontend":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "frontend/**"
+
+"area: infra":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "deploy/**"
+          - "infra/**"
+          - "docker-compose.yml"
+          - "**/Dockerfile*"
+          - "**/.dockerignore"
+          - "trivy.yaml"
+          - ".trivyignore"
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "scripts/ci/**"
+          - "scripts/security/**"
+          - "scripts/kind-e2e.sh"
+          - ".pre-commit-config.yaml"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "*.md"
+
+"area: tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "backend/tests/**"
+          - "frontend/e2e/**"
+          - "frontend/src/**/*.test.*"
+          - "scripts/ci/tests/**"
+
+"area: agents":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "AGENTS.md"
+          - "CLAUDE.md"
+          - ".agents/**"
+          - ".claude/**"
+          - ".codex/**"
+          - ".cursor/**"
+          - "scripts/agent-hooks/**"
+          - ".coderabbit.yaml"

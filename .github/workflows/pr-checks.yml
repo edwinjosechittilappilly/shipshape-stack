@@ -1,0 +1,34 @@
+# Validates the PR title (Conventional Commits) and description (.github/pull_request_template.md) with
+# scripts/ci/check_pr.py. Separate from ci.yml on purpose: editing a title or description re-runs only this cheap check
+# instead of the whole test suite. Add `PR checks / validate` to the required checks in the branch ruleset if you want
+# it to block merging.
+#
+# Read-only: no labels, comments or status writes (pr-labeler.yml owns writes). The title and body reach the script
+# through the event payload file ($GITHUB_EVENT_PATH), never through `${{ }}` interpolation into a shell, so a
+# malicious title cannot inject commands.
+name: PR checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Dependabot and other bot PRs: the script still checks the title but skips the body rules.
+      - name: Check title and description
+        run: python3 scripts/ci/check_pr.py

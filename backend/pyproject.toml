@@ -1,0 +1,108 @@
+[project]
+name = "app-backend"
+version = "0.1.0"
+description = "Items API: FastAPI + SQLAlchemy 2 + Alembic on PostgreSQL"
+requires-python = ">=3.13,<3.14"
+license = "Apache-2.0"
+dependencies = [
+    "alembic>=1.14",
+    "fastapi>=0.115",
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0.36",
+    "uvicorn>=0.32",
+]
+
+# Dev-only tools live in a dependency group so `uv sync --no-dev` (the Docker build) never installs them.
+[dependency-groups]
+dev = [
+    "httpx2>=2.16",  # required by starlette.testclient (fastapi.testclient)
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.15,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Project is "app-backend" but the import package is just `app` (src/app).
+module-name = "app"
+
+# --------------------------------------------------------------------------------------------------
+# Ruff: one tool for lint + format + import sorting. `make lint` is check-only; `make format` writes.
+# --------------------------------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # isort
+    "B",       # bugbear: likely bugs and footguns
+    "UP",      # pyupgrade: modern syntax for the target version
+    "SIM",     # simplify
+    "C4",      # comprehensions
+    "PT",      # pytest style
+    "N",       # pep8-naming
+    "RUF",     # ruff-specific
+    "S",       # bandit-style security checks
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Asserts are the point of tests; hard-coded throwaway credentials in test URLs are fine.
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI reads these call expressions in signatures on purpose; do not flag them as B008.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Path", "fastapi.Query", "fastapi.Body"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# --------------------------------------------------------------------------------------------------
+# mypy: strict everywhere (src, tests and migrations). The pydantic plugin understands model fields.
+# --------------------------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests", "migrations"]
+warn_unreachable = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# --------------------------------------------------------------------------------------------------
+# pytest: the default run is the fast unit suite. Integration tests (real Postgres) are opt-in via
+# `make test-integration`, which passes `-m integration` (the last -m on the command line wins).
+# --------------------------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config -m 'not integration'"
+markers = [
+    "integration: needs a real PostgreSQL reachable via DATABASE_URL (run with `make test-integration`)",
+]
+filterwarnings = ["error"]
+
+# --------------------------------------------------------------------------------------------------
+# Coverage: enforced on the unit run only (`make test` passes --cov). The integration run does not
+# collect coverage, so it never fails on a threshold. The unit suite alone covers ~95%; the gap is
+# the SQL repository, which only the integration suite exercises. fail_under sits just below the
+# current number: raise it when coverage rises, never lower it to get green.
+# --------------------------------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = false

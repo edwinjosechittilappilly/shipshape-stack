@@ -1,0 +1,61 @@
+# Keeps repository labels in sync with .github/labels.yml (the single source of truth). Creates missing labels and
+# updates color/description of existing ones; labels that are not listed are never deleted.
+name: Sync labels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/labels.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: labels-sync
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write # labels are managed through the issues API
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `gh label create --force` updates an existing label in place. No third-party action holds the write token.
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS=$'\t' read -r name color description; do
+            gh label create "$name" --color "$color" --description "$description" --force
+            count=$((count + 1))
+          done < <(python3 - <<'PY'
+          import json, re, sys
+
+          # The file is a flat list of {name, color, description}; parse it without a YAML dependency.
+          entries, current = [], None
+          for line in open(".github/labels.yml", encoding="utf-8"):
+              if not line.strip() or line.lstrip().startswith("#"):
+                  continue
+              item = re.match(r'^- name:\s*"?(.*?)"?\s*$', line)
+              field = re.match(r'^\s+(color|description):\s*"?(.*?)"?\s*$', line)
+              if item:
+                  current = {"name": item.group(1)}
+                  entries.append(current)
+              elif field and current is not None:
+                  current[field.group(1)] = field.group(2)
+          for e in entries:
+              if set(e) != {"name", "color", "description"}:
+                  sys.exit(f"incomplete label entry: {e}")
+              print(f"{e['name']}\t{e['color']}\t{e['description']}")
+          PY
+          )
+          echo "Synced $count labels." | tee -a "$GITHUB_STEP_SUMMARY"

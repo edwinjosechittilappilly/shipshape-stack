@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (git-ignored) and adjust. Contains no secrets.
+kube_context = "my-dev-cluster"
+namespace    = "app"

@@ -1,0 +1,52 @@
+# React Doctor: static analysis for React security, performance and correctness issues, reported on the PR.
+#
+# ADVISORY by default: it posts one sticky PR comment, inline review comments and a commit status, and never fails the
+# check (`blocking: none`). `make -C frontend doctor` (run in the `frontend` job of ci.yml) is the local/CI-gate
+# equivalent for the same ruleset.
+#
+# Graduating to a gate: once the codebase is clean and the team trusts the signal, set `blocking: error` (fail on errors
+# only) or `blocking: warning` (fail on warnings too) below, then add `React Doctor` to the required checks in the
+# branch ruleset. Do that in its own PR so the change in strictness is visible in history.
+#
+# Fork PRs get a read-only token, so the comment and status steps degrade to a warning there; the scan itself still runs.
+name: React Doctor
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/react-doctor.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/react-doctor.yml"
+
+concurrency:
+  group: react-doctor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  react-doctor:
+    name: React Doctor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Draft PRs are skipped to keep noise down; the scan runs when they are marked ready for review.
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    permissions:
+      contents: read
+      pull-requests: write # sticky summary comment and inline review comments
+      statuses: write # commit status with score and counts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history lets the action diff against the base branch and report only issues this PR introduced.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: millionco/react-doctor@695e46eee203a5d1855020191aa7e9c010a1250e # v2.4.0
+        with:
+          directory: frontend
+          blocking: none

@@ -1,0 +1,42 @@
+{{- if .Values.test.enabled }}
+# `helm test <release>`: exercises the real path a user takes - frontend -> nginx proxy -> API -> DB.
+# Uses the backend image (Python stdlib) so no extra image has to be pulled.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "app.fullname" . }}-test
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" . "component" "test") | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    {{- toYaml .Values.backend.podSecurityContext | nindent 4 }}
+  containers:
+    - name: test
+      image: {{ include "app.image" (dict "image" .Values.backend.image "ctx" .) | quote }}
+      imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+      securityContext:
+        {{- toYaml .Values.backend.securityContext | nindent 8 }}
+      env:
+        - name: BASE_URL
+          value: {{ printf "http://%s-frontend:%d" (include "app.fullname" .) (int .Values.frontend.service.port) | quote }}
+      command:
+        - python
+        - -c
+        - |
+          import json, os, urllib.request
+          base = os.environ["BASE_URL"]
+          with urllib.request.urlopen(base + "/healthz", timeout=5) as r:
+              assert r.status == 200, r.status
+          with urllib.request.urlopen(base + "/api/v1/items", timeout=10) as r:
+              assert r.status == 200, r.status
+              assert isinstance(json.load(r), list)
+          print("ok: frontend /healthz and proxied /api/v1/items")
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+{{- end }}

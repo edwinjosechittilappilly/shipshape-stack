@@ -1,0 +1,145 @@
+# Deploy the Helm chart (deploy/helm/app) to a Kubernetes environment using images from the Release workflow.
+#
+#   * Automatic: when the Release workflow succeeds for a version tag, deploy that version to `staging`.
+#   * Manual:    Actions -> Deploy -> Run workflow: choose `staging` or `production` and an image tag
+#                (a release such as `v1.2.3`, or `sha-abc1234`).
+#
+# Safe as a template: when the environment has no `KUBECONFIG` secret the workflow prints a notice and exits successfully.
+#
+# Setup (Settings -> Environments): create `staging` and `production`. On each add the secret `KUBECONFIG` (a kubeconfig
+# for a service account that may only manage the target namespace) and optionally variables `K8S_NAMESPACE` and
+# `HELM_RELEASE`. Give `production` required reviewers and a deployment-branch rule so nobody can deploy unreviewed.
+# The database Secret (chart value `database.existingSecret`) must already exist in the namespace; see docs/deployment.md.
+#
+# Images are resolved to immutable digests and deployed by digest, so what you tested is exactly what runs even if a
+# tag is later moved. `--atomic` rolls the release back automatically when it does not become ready.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+      image_tag:
+        description: Image tag to deploy (for example v1.2.3 or sha-abc1234)
+        type: string
+        required: true
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy
+    # workflow_run fires for every tag build; only successful ones deploy.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment || 'staging' }}
+    concurrency:
+      group: deploy-${{ inputs.environment || 'staging' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read # resolve image digests in GHCR
+    env:
+      TARGET_ENV: ${{ inputs.environment || 'staging' }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_branch }}
+      NAMESPACE: ${{ vars.K8S_NAMESPACE || format('app-{0}', inputs.environment || 'staging') }}
+      RELEASE: ${{ vars.HELM_RELEASE || 'app' }}
+      HAS_KUBECONFIG: ${{ secrets.KUBECONFIG != '' }}
+    steps:
+      - name: Check prerequisites
+        id: gate
+        run: |
+          if [ "$HAS_KUBECONFIG" != "true" ]; then
+            echo "::notice title=Deploy skipped::No KUBECONFIG secret in the '$TARGET_ENV' environment. Add it to enable deployments (see the header of .github/workflows/deploy.yml)."
+            echo "run=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "run=true" >>"$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.run == 'true'
+        with:
+          # Deploy the chart that belongs to the release when a version tag is given, otherwise the selected ref.
+          ref: ${{ startsWith(env.IMAGE_TAG, 'v') && format('refs/tags/{0}', env.IMAGE_TAG) || github.sha }}
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        if: steps.gate.outputs.run == 'true'
+        with:
+          version: v4.3.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        if: steps.gate.outputs.run == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Resolve image digests
+        id: digests
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          base="ghcr.io/${GITHUB_REPOSITORY,,}"
+          for image in backend frontend; do
+            digest="$(docker buildx imagetools inspect "$base/$image:$IMAGE_TAG" --format '{{.Manifest.Digest}}')"
+            case "$digest" in sha256:*) ;; *) echo "::error::Could not resolve $base/$image:$IMAGE_TAG"; exit 1 ;; esac
+            echo "$image=$digest" >>"$GITHUB_OUTPUT"
+          done
+          echo "base=$base" >>"$GITHUB_OUTPUT"
+      - name: Helm upgrade --install
+        if: steps.gate.outputs.run == 'true'
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+          BASE: ${{ steps.digests.outputs.base }}
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBECONFIG_DATA" >"$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          values=()
+          if [ -f "deploy/helm/app/values-${TARGET_ENV}.yaml" ]; then
+            values+=(--values "deploy/helm/app/values-${TARGET_ENV}.yaml")
+          fi
+          helm upgrade --install "$RELEASE" deploy/helm/app \
+            --namespace "$NAMESPACE" --create-namespace \
+            --atomic --wait --timeout 10m \
+            "${values[@]}" \
+            --set "config.appEnv=$TARGET_ENV" \
+            --set "backend.image.repository=$BASE/backend" --set "backend.image.digest=$BACKEND_DIGEST" \
+            --set "frontend.image.repository=$BASE/frontend" --set "frontend.image.digest=$FRONTEND_DIGEST"
+      # Runs the chart's test pod (frontend /healthz and the proxied API). A failure marks the deploy failed, but the
+      # release stays in place for inspection; roll back with `helm rollback` if needed.
+      - name: Post-deploy smoke test
+        if: steps.gate.outputs.run == 'true'
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$KUBECONFIG_DATA" >"$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          helm test "$RELEASE" --namespace "$NAMESPACE" --timeout 3m --logs
+      - name: Summary
+        if: steps.gate.outputs.run == 'true' && always()
+        env:
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          {
+            echo "### Deploy to \`$TARGET_ENV\`"
+            echo
+            echo "- Tag: \`$IMAGE_TAG\`"
+            echo "- Namespace / release: \`$NAMESPACE\` / \`$RELEASE\`"
+            echo "- Backend: \`$BACKEND_DIGEST\`"
+            echo "- Frontend: \`$FRONTEND_DIGEST\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: Remove kubeconfig
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kubeconfig"

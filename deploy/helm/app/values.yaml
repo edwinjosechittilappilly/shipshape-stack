@@ -1,0 +1,171 @@
+# Default values. Everything here is production-leaning: hardened security context, no dev
+# secrets, no ingress, replicas > 1 is a one-line override. Local overrides live in
+# deploy/kind/values-kind.yaml. Types and unknown keys are enforced by values.schema.json.
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+# Cluster DNS domain; only used to build the default frontend.apiUpstream (change on clusters
+# that do not use the default `cluster.local`).
+clusterDomain: cluster.local
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Non-secret application settings; rendered into a ConfigMap and injected with envFrom.
+config:
+  appEnv: production # local | ci | staging | production
+  logLevel: INFO
+  corsOrigins: "" # comma-separated; empty = same-origin only (the frontend proxies /api)
+
+database:
+  # The DATABASE_URL (SQLAlchemy URL, e.g. postgresql+psycopg://user:pass@host:5432/db) is read
+  # from an existing Secret that you create out-of-band (kubectl, External Secrets, Sealed
+  # Secrets, CSI driver ...). This is the supported production path.
+  existingSecret: app-database
+  existingSecretKey: database-url
+  # DEV ONLY: set `url` (and blank existingSecret) to have the chart create the Secret. The URL
+  # then lives in Helm release storage in plain text, so never do this for real environments.
+  url: ""
+
+backend:
+  replicaCount: 2
+  image:
+    # Placeholder: set to your registry path (ghcr.io/<owner>/<repo>/backend).
+    repository: ghcr.io/example-org/example-repo/backend
+    tag: "" # defaults to .Chart.AppVersion
+    digest: "" # sha256:... ; when set it wins over tag (immutable, preferred for promotion)
+    pullPolicy: IfNotPresent
+  port: 8000
+  service:
+    port: 8000
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true # /tmp is an emptyDir
+    capabilities: {drop: [ALL]}
+  # /healthz = liveness (no DB, so a DB outage never restarts pods); /readyz = readiness (DB reachable).
+  startupProbe:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 2
+    failureThreshold: 30
+  livenessProbe:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 10
+    timeoutSeconds: 3
+  readinessProbe:
+    httpGet: {path: /readyz, port: http}
+    periodSeconds: 5
+    timeoutSeconds: 3
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/example-org/example-repo/frontend
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  port: 8080
+  service:
+    port: 80
+  # nginx envsubst target for the /api/ proxy. Empty = the in-chart backend Service, fully qualified
+  # (http://<release>-backend.<namespace>.svc.<clusterDomain>:<port>).
+  apiUpstream: ""
+  resources:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101 # nginx-unprivileged
+    runAsGroup: 101
+    fsGroup: 101
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: [ALL]}
+  # Writable paths nginx needs with a read-only root filesystem (each becomes an emptyDir).
+  # /etc/nginx/conf.d receives the config generated from the envsubst template at startup.
+  writablePaths: [/tmp, /etc/nginx/conf.d]
+  startupProbe:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 2
+    failureThreshold: 30
+  livenessProbe:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 10
+    timeoutSeconds: 3
+  readinessProbe:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 5
+    timeoutSeconds: 3
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Schema migrations run as a Helm hook Job (pre-install, pre-upgrade) using the backend image,
+# so the schema is current before any new pod receives traffic and is never raced by replicas.
+migration:
+  enabled: true
+  command: [alembic, upgrade, head]
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  # /api -> backend, / -> frontend
+  tls: []
+
+# Optional least-privilege traffic rules (needs a CNI that enforces NetworkPolicy).
+networkPolicy:
+  enabled: false
+  # Namespace labels allowed to reach the frontend (your ingress controller). Empty = any source.
+  ingressNamespaceSelector: {}
+  # `to` peers for database egress, e.g. [{ipBlock: {cidr: 10.0.0.0/16}}]. Empty = any destination on the port.
+  databaseTo: []
+  databasePort: 5432
+
+# Pod that runs `helm test`: checks the frontend /healthz and the proxied API.
+test:
+  enabled: true

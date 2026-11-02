@@ -1,0 +1,10 @@
+# Single-node kind cluster for local and CI end-to-end runs (see scripts/kind-e2e.sh).
+#
+# No extraPortMappings on purpose: the e2e script reaches the app through `kubectl port-forward`,
+# so nothing binds host ports 80/443 and several clusters/runs can coexist. If you want a real
+# ingress controller locally, add the standard ingress-ready label + 80/443 mappings from the
+# kind docs and set ingress.enabled=true in your values file.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane

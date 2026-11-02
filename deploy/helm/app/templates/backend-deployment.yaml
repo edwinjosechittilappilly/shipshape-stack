@@ -1,0 +1,101 @@
+{{- $b := .Values.backend }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}-backend
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" . "component" "backend") | nindent 4 }}
+spec:
+  {{- if not $b.autoscaling.enabled }}
+  replicas: {{ $b.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Roll pods when non-secret config changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with $b.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "app.componentLabels" (dict "ctx" . "component" "backend") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "app.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $b.podSecurityContext | nindent 8 }}
+      containers:
+        - name: backend
+          image: {{ include "app.image" (dict "image" $b.image "ctx" .) | quote }}
+          imagePullPolicy: {{ $b.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $b.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $b.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "app.fullname" . }}
+          env:
+            {{- include "app.databaseEnv" . | nindent 12 }}
+            {{- with $b.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            {{- toYaml $b.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml $b.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $b.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $b.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+      {{- with $b.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $b.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $b.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Spread replicas across nodes when possible without blocking scheduling on small clusters.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "app.selectorLabels" (dict "ctx" . "component" "backend") | nindent 14 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.fullname" . }}-backend
+  labels:
+    {{- include "app.componentLabels" (dict "ctx" . "component" "backend") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ $b.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "app.selectorLabels" (dict "ctx" . "component" "backend") | nindent 4 }}

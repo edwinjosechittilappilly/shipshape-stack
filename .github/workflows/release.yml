@@ -1,0 +1,189 @@
+# Release: push a tag `vMAJOR.MINOR.PATCH` (optionally `-rc.1` etc.) from a commit on main and this workflow
+#   1. builds multi-arch (amd64 + arm64) backend and frontend images and pushes them to GHCR
+#      (tags: exact version, major.minor, `sha-<short>`, and `latest` for stable releases),
+#   2. generates a CycloneDX SBOM per image with Trivy (attached to the release; attested on the image when signing runs),
+#   3. signs every image by digest with keyless cosign (public repos, or private ones that opt in; see below),
+#   4. records SLSA build provenance (public repositories only: needs GitHub attestations),
+#   5. creates the GitHub Release with notes grouped by label (.github/release.yml) and the SBOMs attached.
+#
+# Cut a release:  git tag -s v1.2.3 -m "v1.2.3" && git push origin v1.2.3
+# Verify an image: cosign verify --certificate-identity-regexp '^https://github.com/<owner>/<repo>/\.github/workflows/release\.yml@' \
+#                    --certificate-oidc-issuer https://token.actions.githubusercontent.com ghcr.io/<owner>/<repo>/backend@sha256:...
+#
+# Keyless signatures are recorded in the PUBLIC Sigstore transparency log, which includes the repository name. So
+# signing runs automatically only for public repos; a private repo opts in with the repository variable
+# SIGN_PRIVATE_IMAGES=true (accepting that its name becomes public) or uses a private Sigstore instance.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Verify tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # A release must come from reviewed code that passed CI: the tagged commit has to be on main and `ci-success` green.
+      - name: Tag is on main and CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=Tag not on main::$GITHUB_REF_NAME points at a commit that is not on main."
+            exit 1
+          fi
+          result="$(gh api "repos/$GH_REPO/commits/$GITHUB_SHA/check-runs?check_name=ci-success" \
+            --jq '[.check_runs[] | select(.status == "completed")] | sort_by(.completed_at) | last | .conclusion // "none"')"
+          if [ "$result" != "success" ]; then
+            echo "::error title=CI not green::ci-success is '$result' for $GITHUB_SHA. Fix main (or re-run CI) before tagging."
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME is on main and ci-success passed." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  images:
+    name: Image (${{ matrix.image }})
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [backend, frontend]
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # keyless cosign + attestations (OIDC)
+      attestations: write # build provenance (public repos)
+    env:
+      IS_PUBLIC: ${{ github.event.repository.visibility == 'public' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Image name (GHCR requires lower case)
+        id: name
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}/${IMAGE}" >>"$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.name.outputs.ref }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
+            type=sha,prefix=sha-
+          # `latest` only for stable tags (no `-rc.1` suffix).
+          flavor: latest=auto
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./${{ matrix.image }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=release-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+      - name: Install trivy (pinned, checksum-verified)
+        run: scripts/ci/install-tool.sh trivy
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      # Everything below addresses the image by immutable digest, never by a movable tag.
+      - name: Generate SBOM (CycloneDX)
+        env:
+          IMAGE_REF: ${{ steps.name.outputs.ref }}@${{ steps.build.outputs.digest }}
+          SBOM_NAME: sbom-${{ matrix.image }}.cdx.json
+        run: trivy image --format cyclonedx --output "$SBOM_NAME" "$IMAGE_REF"
+      - name: Sign image and attach SBOM attestation (keyless)
+        if: env.IS_PUBLIC == 'true' || vars.SIGN_PRIVATE_IMAGES == 'true'
+        env:
+          IMAGE_REF: ${{ steps.name.outputs.ref }}@${{ steps.build.outputs.digest }}
+          SBOM_NAME: sbom-${{ matrix.image }}.cdx.json
+        run: |
+          cosign sign --yes "$IMAGE_REF"
+          cosign attest --yes --type cyclonedx --predicate "$SBOM_NAME" "$IMAGE_REF"
+      - name: Build provenance attestation
+        if: env.IS_PUBLIC == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.name.outputs.ref }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Record digest
+        env:
+          IMAGE: ${{ matrix.image }}
+          REF: ${{ steps.name.outputs.ref }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p out
+          printf '| %s | %s@%s |\n' "$IMAGE" "$REF" "$DIGEST" > "out/digest-${IMAGE}.md"
+          mv "sbom-${IMAGE}.cdx.json" out/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ matrix.image }}
+          path: out/
+          retention-days: 30
+
+  github-release:
+    name: GitHub Release
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release and upload assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: out
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Container images"
+            echo
+            echo "Pull by digest for reproducible deploys. Each image carries a CycloneDX SBOM; public releases are also signed with cosign (keyless)."
+            echo
+            echo "| Image | Reference |"
+            echo "| --- | --- |"
+            cat out/digest-*.md
+            echo
+          } > header.md
+          flags=(--verify-tag --title "$GITHUB_REF_NAME" --generate-notes --notes-file header.md)
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" out/sbom-*.cdx.json
+          cat header.md >>"$GITHUB_STEP_SUMMARY"

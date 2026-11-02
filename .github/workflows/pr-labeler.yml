@@ -1,0 +1,73 @@
+# Labels PRs automatically: `area: *` from changed paths, `type: *` and `breaking-change` from the title, and exactly one
+# `size/*` from the diff size (lockfiles and generated files excluded). See docs/ci.md and .github/labels.yml.
+#
+# SECURITY: this workflow uses `pull_request_target`, which runs with a write token even for PRs from forks. That is
+# only safe because it NEVER checks out, builds, imports or executes code from the pull request:
+#   * the single checkout below has no `ref:`, so for pull_request_target it is the BASE branch (trusted, reviewed code);
+#   * the PR title and body are untrusted input and are only ever passed through `env:` (never interpolated into
+#     `run:`) and read by our own script as data;
+#   * actions/labeler reads its config from the base branch and only inspects the list of changed file names.
+# Do not add steps that run `npm install`, `make`, or anything from the PR's tree. See docs/security.md.
+name: PR labeler
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pr-labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  label:
+    name: label
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write # add and remove labels (PRs are issues, so label writes go through this scope)
+      issues: write
+    steps:
+      # Base branch only (default ref for pull_request_target). Needed for scripts/ci/pr_labels.py.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+      - name: Area labels from changed paths
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+      - name: Type, breaking and size labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/body.md"
+          gh api --paginate --slurp "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" > "$RUNNER_TEMP/files.json"
+          # Re-read labels from the API: the event payload can be stale when several runs overlap.
+          current="$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name' | paste -sd, -)"
+          plan="$(python3 scripts/ci/pr_labels.py \
+            --title "$PR_TITLE" \
+            --body-file "$RUNNER_TEMP/body.md" \
+            --files-json "$RUNNER_TEMP/files.json" \
+            --current-labels "$current")"
+          echo "$plan"
+          # REST (not `gh pr edit`, which goes through GraphQL and needs extra token scopes).
+          while IFS= read -r label; do
+            gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/$(jq -rn --arg l "$label" '$l | @uri')" --silent
+          done < <(echo "$plan" | jq -r '.remove[]')
+          while IFS= read -r label; do
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/labels" -f "labels[]=$label" --silent
+          done < <(echo "$plan" | jq -r '.add[]')
+          {
+            echo "### Labels"
+            echo
+            echo "Desired automated labels: $(echo "$plan" | jq -r '.desired | map("\`" + . + "\`") | join(", ")')"
+          } >>"$GITHUB_STEP_SUMMARY"
