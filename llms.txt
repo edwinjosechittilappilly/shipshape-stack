@@ -1,0 +1,33 @@
+# ShipShape
+
+> ShipShape is an open-source, agent-ready starter template for full-stack, cloud-native apps (FastAPI, PostgreSQL, React, TypeScript, Docker, Helm, Kubernetes, OpenTofu, GitHub Actions). It ships CI with one required `ci-success` check, Trivy and gitleaks security scanning, unit/integration/Playwright/kind tests, PR hygiene, and skills and hooks for AI coding agents (Claude Code, Codex, Cursor). The repo-audit skill scores any repository on 96 best-practice checks.
+
+Every command is a `make` target; `make check` is the pre-push gate and matches CI.
+
+## Start here
+
+- [README](README.md): overview, quick start, features, FAQ
+- [AGENTS.md](AGENTS.md): instructions for AI coding agents (commands, definition of done, rules)
+- [CONTRIBUTING.md](CONTRIBUTING.md): contribution workflow for humans
+
+## Docs
+
+- [Architecture](docs/architecture.md)
+- [Testing](docs/testing.md)
+- [CI](docs/ci.md)
+- [Security](docs/security.md)
+- [Deployment](docs/deployment.md)
+- [Conventions](docs/conventions.md)
+- [Agents overview](docs/agents/README.md)
+- [Self-managed PRs](docs/agents/self-managed-prs.md)
+
+## Skills
+
+- [Skills index](.agents/skills/README.md)
+- [repo-audit](.agents/skills/repo-audit/SKILL.md): score a repository and plan improvements
+
+## Optional
+
+- [ADRs](docs/adr/README.md)
+- [Plans](docs/plans/README.md)
+- [Changelog](CHANGELOG.md)
