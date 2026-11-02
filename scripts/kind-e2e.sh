@@ -85,7 +85,7 @@ diagnostics() {
 cleanup() {
   local rc=$?
   trap - EXIT
-  [[ -n "$PF_PID" ]] && kill "$PF_PID" 2>/dev/null || true
+  if [[ -n "$PF_PID" ]]; then kill "$PF_PID" 2>/dev/null || true; fi
   if [[ $rc -ne 0 ]]; then
     info "FAILED (exit ${rc})"
     if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
