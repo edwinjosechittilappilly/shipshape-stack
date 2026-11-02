@@ -10,9 +10,9 @@
 # Every base image is pinned by tag AND digest: the tag is for humans, the digest makes builds
 # reproducible and tamper-evident. Dependabot (docker ecosystem) bumps both together. Literal FROM
 # lines (no ARG) so Dependabot can see them; uv is its own stage for the same reason.
-FROM ghcr.io/astral-sh/uv:0.11.15@sha256:e590846f4776907b254ac0f44b5b380347af5d90d668138ca7938d1b0c2f98d3 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
-FROM python:3.13.18-slim-trixie@sha256:76baad6037690d6e8c4397fbcaef17bca6f19eecef822b708fe8fa3417d30bb5 AS builder
+FROM python:3.15.0-slim-trixie@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS builder
 # Copying uv's static binary avoids installing it via pip/curl.
 COPY --from=uv /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1 \
@@ -34,7 +34,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-FROM python:3.13.18-slim-trixie@sha256:76baad6037690d6e8c4397fbcaef17bca6f19eecef822b708fe8fa3417d30bb5 AS runtime
+FROM python:3.15.0-slim-trixie@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
 ARG CREATED=unknown
