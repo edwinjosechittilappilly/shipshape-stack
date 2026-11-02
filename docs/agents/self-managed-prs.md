@@ -67,6 +67,11 @@ All must be true: `ci-success` green on the latest commit; no unresolved review 
 Verification table filled and truthful; diff within the size limit; no paths on the sensitive list changed (unless a human
 owner is a reviewer); no `status: needs-human` or `status: blocked`; PR not in draft; migrations (if any) reversible.
 
+> [!CAUTION]
+> Auto-merge is not always recommended. Treat it as a privilege earned per change class, not a default: start with
+> docs, tests and dependency patch bumps; keep human approval for auth, migrations, infra, workflows, secrets, public
+> APIs, `breaking-change` and large diffs. Turn it off (`status: needs-human`) the moment a merged change surprises you.
+
 ## Guardrails
 
 | Guardrail | Where it is enforced | Notes |
