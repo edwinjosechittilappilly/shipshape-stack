@@ -77,7 +77,7 @@ It is slow, so it runs on pushes to `main`, on the weekly schedule, on manual ru
 | `codeql.yml` | PR, push to `main`, weekly | CodeQL for Python, JS/TS and workflows (public repos only). |
 | `release.yml` | tag `vX.Y.Z` | Multi-arch images to GHCR, SBOM, signatures, provenance, GitHub Release. |
 | `deploy.yml` | Release success, manual | `helm upgrade --install --atomic` by image digest, then smoke test. No-ops without a `KUBECONFIG` secret. |
-| `automerge.yml` | label `status: ready-to-merge` | Enables squash auto-merge; GitHub merges after required checks and reviews pass. |
+| `automerge.yml` | label `status: ready-to-merge` | Enables squash auto-merge; GitHub merges after required checks and reviews pass. Uses the `AUTOMERGE_TOKEN` secret when set, because merges made with `GITHUB_TOKEN` do not trigger `push` workflows (no post-merge CI on `main`). |
 | `agent-review.yml` | label `agent: review`, `@claude` comment | Optional AI review. No-ops without the `ANTHROPIC_API_KEY` secret. |
 | `labels-sync.yml` | push touching `labels.yml`, manual | Applies [`.github/labels.yml`](../.github/labels.yml) to the repository. |
 | `stale.yml` | daily | Marks inactive issues and PRs stale after 60 days, closes after 21 more. |
@@ -99,7 +99,7 @@ Workflows alone cannot enforce policy. Configure once (Settings):
 2. **General → Pull Requests:** enable *Allow auto-merge* and *Allow squash merging*, enable *Automatically delete head branches*.
 3. **Actions → General:** workflow permissions *Read repository contents* by default; allow only actions from this repository and verified creators if you want a stricter allowlist; require approval for fork PRs.
 4. **Environments:** `staging`, `production` with the `KUBECONFIG` secret; add required reviewers on `production`.
-5. **Secrets (optional):** `ANTHROPIC_API_KEY` for `agent-review.yml`.
+5. **Secrets (optional):** `ANTHROPIC_API_KEY` for `agent-review.yml`; `AUTOMERGE_TOKEN` (fine-grained PAT or GitHub App token with Contents + Pull requests write) so auto-merged commits trigger CI, security and release workflows on `main`.
 6. **Merge queue (optional):** `ci.yml` already listens to `merge_group`.
 
 ## Caching
