@@ -16,7 +16,7 @@ RUN npx vite build
 # nginx-unprivileged runs as uid/gid 101 and listens on 8080, so it works with a read-only root filesystem when
 # /tmp and /etc/nginx/conf.d are writable (pid and temp paths live in /tmp). The stock entrypoint renders every
 # /etc/nginx/templates/*.template with envsubst into /etc/nginx/conf.d at start, which is how API_UPSTREAM is applied.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine3.24@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine3.24@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 
 # Base images lag behind Alpine security fixes; pull them in at build time so the image scans clean between base
 # releases. Needs root, so switch to it for this one step and back to the unprivileged user below.
