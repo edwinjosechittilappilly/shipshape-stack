@@ -5,6 +5,11 @@ description: "Use when reviewing a diff, branch or pull request (including your 
 
 # Code review
 
+> **Outside ShipShape?** `make` targets, paths and labels here come from the
+> [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack). In another repo, use its own
+> task runner, test folders and labels (see its `AGENTS.md`/`CONTRIBUTING.md`). Keep the rules, swap the names, and
+> never invent a command that does not exist.
+
 Review the change, not the author. The goal is to find what would hurt in production or in six
 months, with evidence, and say so briefly. If you wrote the code, review it *as a stranger*: re-read
 the diff cold, and run the checks instead of trusting memory.

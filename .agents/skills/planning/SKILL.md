@@ -5,6 +5,10 @@ description: "Use before starting any change that spans packages, adds a depende
 
 # Planning
 
+> **Outside ShipShape?** `docs/plans/` and `docs/adr/` paths here come from the
+> [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack). In another repo, use its own
+> design-doc and ADR locations, or copy the templates from ShipShape. Keep the rules, swap the names.
+
 Planning is cheap; rework is not. A plan makes the thinking reviewable *before* code exists and
 gives agents (and humans) an unambiguous definition of the work and its slices.
 

@@ -1,9 +1,14 @@
 ---
 name: pull-request
-description: "Use when opening, updating or responding to review on a pull request in this repo: branch, conventional title, description headings, the Verification table, screenshots, sizing and splitting, draft vs ready, labels (including agent labels), and replying to review comments."
+description: "Use when opening, updating or responding to review on a pull request: branch, conventional title, description headings, the Verification table, screenshots, sizing and splitting, draft vs ready, labels (including agent labels), and replying to review comments."
 ---
 
 # Pull request
+
+> **Outside ShipShape?** `make` targets, the PR template headings and labels here come from the
+> [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack). In another repo, follow its own
+> PR template, checks and labels (see its `.github/` and `CONTRIBUTING.md`). Keep the rules, swap the names, and
+> never invent a command that does not exist.
 
 A PR is the only durable record of what was verified and why. CI enforces the title and headings
 (`scripts/ci/check_pr.py`), but reviewers (human and AI) judge the *content*. Write for someone

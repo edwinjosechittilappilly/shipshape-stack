@@ -25,6 +25,7 @@ Every command is a `make` target; `make check` is the pre-push gate and matches 
 
 - [Skills index](.agents/skills/README.md)
 - [repo-audit](.agents/skills/repo-audit/SKILL.md): score a repository and plan improvements
+- Install any skill into another project: `npx skills add edwinjosechittilappilly/shipshape-stack --skill <name>`
 
 ## Optional
 

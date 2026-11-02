@@ -5,6 +5,11 @@ description: "Use when a CI check fails on a pull request or on main: find the f
 
 # CI triage
 
+> **Outside ShipShape?** `make` targets, paths and labels here come from the
+> [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack). In another repo, use its own
+> task runner, test folders and labels (see its `AGENTS.md`/`CONTRIBUTING.md`). Keep the rules, swap the names, and
+> never invent a command that does not exist.
+
 CI calls `make` targets only (see `docs/ci.md`), so **every CI failure reproduces locally with the
 same target**. Your job is to learn *why* it failed, not to make it green.
 
