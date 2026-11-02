@@ -116,10 +116,10 @@ Every planned PR in the plan document needs:
 
 ## 6. Getting template files
 
-Preferred: a local checkout of the template (`git clone` or `gh repo clone <owner>/best-practice-template /tmp/bpt`)
+Preferred: a local checkout of the template (`git clone` or `gh repo clone <owner>/shipshape-stack /tmp/bpt`)
 and copy files out of it. Without a clone, raw files work for public repos:
-`curl -fsSL https://raw.githubusercontent.com/<owner>/best-practice-template/main/<path> -o <path>`. If the template
-repository is private, use `gh api repos/<owner>/best-practice-template/contents/<path> --jq .content | base64 -d`
+`curl -fsSL https://raw.githubusercontent.com/<owner>/shipshape-stack/main/<path> -o <path>`. If the template
+repository is private, use `gh api repos/<owner>/shipshape-stack/contents/<path> --jq .content | base64 -d`
 or a clone. Links in reports use `--template-url` (default points at the public location); override it for a fork.
 
 ## 7. Verification and the score delta

@@ -4,5 +4,5 @@ blank_issues_enabled: false
 contact_links:
   # TEMPLATE NOTE: after you generate a repo from this template, point this URL at your own repository.
   - name: Report a security vulnerability
-    url: https://github.com/edwinjosechittilappilly/best-practice-template/security/advisories/new
+    url: https://github.com/edwinjosechittilappilly/shipshape-stack/security/advisories/new
     about: Private disclosure. Please do not open a public issue. See SECURITY.md for the policy and response times.
