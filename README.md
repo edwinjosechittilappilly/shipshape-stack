@@ -126,6 +126,14 @@ trust.
   Auto-merge happens only after `ci-success`. Worked examples are in
   [`docs/agents/sample-approaches.md`](docs/agents/sample-approaches.md).
 
+> [!CAUTION]
+> **Auto-merge is opt-in and not always recommended.** It is only as safe as your required checks and reviews.
+> Keep a human approval (CODEOWNERS) for anything touching auth, data migrations, infrastructure, CI workflows,
+> secrets or public APIs, and for any PR with `breaking-change` or `size/L`+. Enable it first for low-risk changes
+> (docs, dependency patch bumps, tests), watch the results, then widen. Without an `AUTOMERGE_TOKEN` secret,
+> auto-merged commits do not trigger CI on `main`. Remove the `status: ready-to-merge` label or add
+> `status: needs-human` to stop it at any time.
+
 ## Score any repository
 
 Is your repo shipshape? The **repo-audit** skill scores any repository on 96 static checks across 10
