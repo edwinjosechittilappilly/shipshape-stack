@@ -1,11 +1,11 @@
 ---
 name: repo-audit
-description: "Use when asked to audit, score or grade a repository against best practices, find gaps in CI, tests, security, docs or agent-readiness, or plan (and optionally execute) improvements using the best-practice template as the base. Runs a static scanner (Python stdlib only), adds a qualitative review, and produces a scorecard, prioritized fixes and a PR-sliced improvement plan."
+description: "Use when asked to audit, score or grade a repository against best practices, find gaps in CI, tests, security, docs or agent-readiness, or plan (and optionally execute) improvements using the ShipShape template as the base. Runs a static scanner (Python stdlib only), adds a qualitative review, and produces a scorecard, prioritized fixes and a PR-sliced improvement plan."
 ---
 
 # Repo audit
 
-Evaluate any repository against the practices in this template, explain the shortcomings, and turn them into a
+Evaluate any repository against the practices in the [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack), explain the shortcomings, and turn them into a
 small-PR improvement plan an agent can execute. The scanner is **evidence**, not the verdict: you add judgement
 (step 2) and you never weaken a check to raise a score.
 

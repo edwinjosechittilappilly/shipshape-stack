@@ -64,6 +64,7 @@ to merge it, written rules for agents, and a score that shows how close any repo
 - [How a change flows](#how-a-change-flows)
 - [For AI coding agents](#for-ai-coding-agents)
 - [Score any repository](#score-any-repository)
+- [Install the skills in any repo](#install-the-skills-in-any-repo)
 - [Project structure](#project-structure)
 - [Commands](#commands)
 - [Use this template](#use-this-template)
@@ -180,9 +181,35 @@ linked to the template file to adapt.
 python3 .agents/skills/repo-audit/scripts/audit.py /path/to/your/repo --format markdown
 ```
 
-It needs only the Python standard library and never runs the target's code. To improve another repo, copy
-`.agents/skills/repo-audit/` into its skills folder and ask your agent to *"audit this repo and raise its score PR
-by PR"*.
+It needs only the Python standard library (3.11+) and never runs the target's code.
+
+## Install the skills in any repo
+
+Every ShipShape skill can be installed into another project with the open
+[`skills` CLI](https://github.com/vercel-labs/skills). No npm package or account needed. It works with Claude
+Code, Codex, Cursor and other agents.
+
+```bash
+npx skills add edwinjosechittilappilly/shipshape-stack --list                 # see what's available
+npx skills add edwinjosechittilappilly/shipshape-stack --skill repo-audit     # one skill
+npx skills add edwinjosechittilappilly/shipshape-stack --all                  # every skill, every agent
+npx skills update                                                             # pull the latest versions
+```
+
+Add `-g` to install for your user instead of the current project. While this repository is private, installing
+needs read access to it (your git or `gh` login is used). Then ask your agent to *"audit this repo and raise its
+score PR by PR"*.
+
+| Skill | Use it for |
+|---|---|
+| `repo-audit` | Score a repository and plan the PRs that improve it |
+| `pull-request` | Titles, descriptions, verification tables, review replies |
+| `writing-issues` | Bug reports, features and agent-ready tasks |
+| `planning` | Design plans, ADRs and slicing work into PRs |
+| `integration-tests` | Tests against a real database or service |
+| `playwright-tests` | Browser end-to-end tests |
+| `code-review` | Severity-ranked review findings |
+| `ci-triage` | Diagnosing a red CI check |
 
 ## Project structure
 

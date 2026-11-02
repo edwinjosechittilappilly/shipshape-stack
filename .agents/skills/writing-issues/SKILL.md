@@ -5,6 +5,11 @@ description: "Use when creating or refining a GitHub issue (bug report, feature 
 
 # Writing issues
 
+> **Outside ShipShape?** Issue forms, paths, labels and example commands (`make up`, `localhost:8080`) here come
+> from the [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack). In another repo, use its
+> own issue templates and labels (see its `.github/ISSUE_TEMPLATE/`), and write reproduction steps with that repo's
+> real startup commands and URLs. Keep the rules, swap the names.
+
 An issue is a contract between whoever asks and whoever builds - increasingly a coding agent with no
 memory of the conversation. A good issue lets someone start without asking a question.
 

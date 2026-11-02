@@ -1,9 +1,14 @@
 ---
 name: integration-tests
-description: "Use when writing, changing or debugging backend integration tests (backend/tests/integration): anything touching SQL, transactions, migrations, constraints or the HTTP stack against a real Postgres. Also use to decide whether a test belongs at integration level at all."
+description: "Use when writing, changing or debugging integration tests against a real database or service: SQL, transactions, migrations, constraints or the HTTP stack. Also use to decide whether a test belongs at integration level at all."
 ---
 
 # Integration tests
+
+> **Outside ShipShape?** `make` targets, paths and labels here come from the
+> [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack) (FastAPI + Postgres). In another
+> repo, use its own task runner, test folders and database (see its `AGENTS.md`/`CONTRIBUTING.md`). Keep the rules,
+> swap the names, and never invent a command that does not exist.
 
 An integration test proves that **our code works with a real dependency at a real boundary**: the
 FastAPI app, SQLAlchemy, Alembic migrations and Postgres together. It exists because mocks cannot

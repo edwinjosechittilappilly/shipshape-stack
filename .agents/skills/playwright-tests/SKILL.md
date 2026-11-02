@@ -1,9 +1,14 @@
 ---
 name: playwright-tests
-description: "Use when writing, changing or debugging Playwright end-to-end tests in frontend/e2e: choosing locators, web-first assertions, the mocked vs fullstack projects, stubbing the network, unique test data, reading traces, accessibility checks. Also use to decide whether a behaviour needs e2e at all."
+description: "Use when writing, changing or debugging Playwright end-to-end tests: choosing locators, web-first assertions, mocked vs full-stack runs, stubbing the network, unique test data, reading traces, accessibility checks. Also use to decide whether a behaviour needs e2e at all."
 ---
 
 # Playwright tests
+
+> **Outside ShipShape?** `make` targets and `frontend/e2e` paths here come from the
+> [ShipShape template](https://github.com/edwinjosechittilappilly/shipshape-stack). In another repo, use its own
+> Playwright config and scripts (see its `AGENTS.md`/`package.json`). Keep the rules, swap the names, and never
+> invent a command that does not exist.
 
 E2E tests check what only a real browser can: layout, focus, navigation, the UI and API working
 together. They are the slowest, flakiest level, so each one must earn its place
