@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="t d">
+  <title id="t">ShipShape</title>
+  <desc id="d">ShipShape, the agent-ready full-stack starter template for full-stack, cloud-native apps: CI gate, security scanning, tests, agent skills and hooks.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b18"/><stop offset="1" stop-color="#131c3b"/></linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.1" r="0.7"><stop offset="0" stop-color="#818cf8" stop-opacity="0.35"/><stop offset="1" stop-color="#818cf8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow2" cx="0.05" cy="1" r="0.6"><stop offset="0" stop-color="#34d399" stop-opacity="0.22"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/></radialGradient>
+    <linearGradient id="road" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/></pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <rect width="1280" height="640" fill="url(#glow2)"/>
+
+  <!-- Mark: a ship under full sail, checked off as ready -->
+  <g transform="translate(96 92)">
+    <rect width="132" height="132" rx="30" fill="#0b1224" stroke="url(#road)" stroke-width="3"/>
+    <path d="M68 24 L68 90 L104 90 Z" fill="url(#road)"/>
+    <path d="M61 38 L61 90 L33 90 Z" fill="url(#road)" fill-opacity="0.7"/>
+    <path d="M24 98 L110 98 L97 114 L37 114 Z" fill="#34d399"/>
+    <circle cx="104" cy="32" r="13" fill="#0b1224" stroke="#34d399" stroke-width="3"/>
+    <path d="M98 32 L102.5 36.5 L110.5 27.5" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="256" y="168" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="92" font-weight="800" fill="#f8fafc" letter-spacing="-2">ShipShape</text>
+  <text x="260" y="212" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="27" font-weight="500" fill="#a5b4fc">The agent-ready full-stack starter</text>
+
+  <text x="96" y="310" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#f1f5f9">Every PR shipshape, human or agent</text>
+  <text x="96" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="22" font-weight="400" fill="#94a3b8">CI gate · security scanning · real tests · PR hygiene · skills &amp; hooks</text>
+
+  <rect x="96" y="408" width="217" height="40" rx="20" fill="#34d399" fill-opacity="0.14" stroke="#34d399" stroke-opacity="0.55"/><text x="204.5" y="434.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">FastAPI + Postgres</text>
+  <rect x="325" y="408" width="187" height="40" rx="20" fill="#38bdf8" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.55"/><text x="418.5" y="434.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">React 19 + Vite</text>
+  <rect x="524" y="408" width="136" height="40" rx="20" fill="#34d399" fill-opacity="0.14" stroke="#34d399" stroke-opacity="0.55"/><text x="592.0" y="434.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">Playwright</text>
+  <rect x="96" y="460" width="146" height="40" rx="20" fill="#818cf8" fill-opacity="0.14" stroke="#818cf8" stroke-opacity="0.55"/><text x="169.0" y="486.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">Helm + kind</text>
+  <rect x="254" y="460" width="197" height="40" rx="20" fill="#fb7185" fill-opacity="0.14" stroke="#fb7185" stroke-opacity="0.55"/><text x="352.5" y="486.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">Trivy + gitleaks</text>
+  <rect x="463" y="460" width="177" height="40" rx="20" fill="#38bdf8" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.55"/><text x="551.5" y="486.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">GitHub Actions</text>
+  <rect x="96" y="512" width="237" height="40" rx="20" fill="#fbbf24" fill-opacity="0.14" stroke="#fbbf24" stroke-opacity="0.55"/><text x="214.5" y="538.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">Agent skills &amp; hooks</text>
+  <rect x="345" y="512" width="217" height="40" rx="20" fill="#818cf8" fill-opacity="0.14" stroke="#818cf8" stroke-opacity="0.55"/><text x="453.5" y="538.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#e2e8f0">Repo score 100/100</text>
+
+  <rect x="812" y="300" width="372" height="252" rx="16" fill="#0b1224" stroke="#334155"/><circle cx="836" cy="322" r="6" fill="#fb7185"/><circle cx="856" cy="322" r="6" fill="#fbbf24"/><circle cx="876" cy="322" r="6" fill="#34d399"/><text x="836" y="366" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17"><tspan fill="#64748b">$ </tspan><tspan fill="#e2e8f0">make check</tspan></text><text x="836" y="398" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17"><tspan fill="#34d399">✓ </tspan><tspan fill="#34d399">lint · types · unit tests</tspan></text><text x="836" y="430" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17"><tspan fill="#34d399">✓ </tspan><tspan fill="#34d399">react-doctor · repo-audit 100%</tspan></text><text x="836" y="462" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17"><tspan fill="#64748b">$ </tspan><tspan fill="#e2e8f0">gh pr create</tspan></text><text x="836" y="494" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17"><tspan fill="#34d399">✓ </tspan><tspan fill="#34d399">title · description · labels</tspan></text><text x="836" y="526" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="17"><tspan fill="#34d399">✓ </tspan><tspan fill="#34d399">ci-success</tspan></text>
+
+  <text x="96" y="608" font-family="'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="18" fill="#64748b">Python · TypeScript · Postgres · Docker · Kubernetes · OpenTofu</text>
+</svg>

@@ -1,7 +1,7 @@
 # gitleaks configuration (https://github.com/gitleaks/gitleaks).
 # We extend the upstream default rule set rather than writing our own, so new secret patterns arrive with
 # gitleaks upgrades. The allowlist is deliberately tiny: only files that are *meant* to contain fake credentials.
-title = "best-practice-template gitleaks config"
+title = "shipshape-stack gitleaks config"
 
 [extend]
 useDefault = true

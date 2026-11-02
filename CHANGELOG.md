@@ -14,3 +14,5 @@ All notable changes to this project are documented here. The format follows
 - Security scanning with Trivy (filesystem, IaC, images), gitleaks, CodeQL, SBOM and image signing on release.
 - PR hygiene: conventional titles, description checks, automatic type/area/size labels.
 - Agent tooling: `AGENTS.md`, reusable skills, safety/format/stop hooks for Claude Code, Codex and Cursor, review and self-managed PR playbooks.
+- ShipShape branding: SEO-focused README with badges, FAQ and comparison table, plus a banner / social-preview image.
+- repo-audit exits with a clear message on Python older than 3.11 instead of a traceback.

@@ -17,6 +17,9 @@ import os
 import sys
 import time
 
+if sys.version_info < (3, 11):  # noqa: UP036 - users run this with whatever python3 they have (macOS ships 3.9)
+    sys.exit(f"repo-audit needs Python >= 3.11 (found {sys.version.split()[0]}). Try: uv run --python 3.12 python {sys.argv[0]} ...")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import checks  # noqa: E402
@@ -24,7 +27,7 @@ from registry import EFFORT_ORDER, NA, POINTS  # noqa: E402
 from repo_context import Repo  # noqa: E402
 
 SCHEMA_VERSION = 1
-DEFAULT_TEMPLATE_URL = "https://github.com/edwinjosechittilappilly/best-practice-template/blob/main"
+DEFAULT_TEMPLATE_URL = "https://github.com/edwinjosechittilappilly/shipshape-stack/blob/main"
 GRADES = ((90, "A"), (80, "B"), (70, "C"), (60, "D"))
 
 # Things no static scan can establish; the agent must verify them (see references/rubric.md, "Qualitative pass").
