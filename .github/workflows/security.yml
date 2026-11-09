@@ -92,31 +92,31 @@ jobs:
       # One upload per report: GitHub accepts a single run per SARIF category.
       - name: Code scanning (tree)
         if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-fs.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/security/trivy-fs.sarif
           category: trivy-fs
       - name: Code scanning (IaC)
         if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-config.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/security/trivy-config.sarif
           category: trivy-config
       - name: Code scanning (Helm chart)
         if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-helm.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/security/trivy-helm.sarif
           category: trivy-helm
       - name: Code scanning (backend image)
         if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-image-app-backend.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/security/trivy-image-app-backend.sarif
           category: trivy-image-backend
       - name: Code scanning (frontend image)
         if: ${{ !cancelled() && env.UPLOAD_SARIF == 'true' && hashFiles('reports/security/trivy-image-app-frontend.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/security/trivy-image-app-frontend.sarif
           category: trivy-image-frontend
@@ -165,7 +165,7 @@ jobs:
           if-no-files-found: ignore
       - name: Code scanning
         if: ${{ !cancelled() && github.event.repository.visibility == 'public' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && hashFiles('gitleaks.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
